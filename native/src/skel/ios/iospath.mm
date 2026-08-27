@@ -25,6 +25,7 @@ __attribute__((constructor))
 static void ios_early_init(void) {
 	ios_log_open();
 	ios_log("=== reVC iOS early init (constructor) ===");
+	ios_log("BUILD_ID: IOSDIAG-2026-08-27C");
 
 	// reVC resolves ALL game data (TEXT/AMERICAN.GXT, MODELS/*, DATA/*, ...)
 	// relative to the process CWD. On iOS the CWD is the app bundle, where no
@@ -84,6 +85,8 @@ ios_log_open(void)
 	snprintf(p, sizeof(p), "%s/gamelog.txt", ios_documents_path());
 	g_logFile = fopen(p, "w");
 	g_logFd = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+	if (g_logFd < 0 && g_logFile)
+		g_logFd = fileno(g_logFile);
 	if (g_logFile) {
 		time_t t = time(nil);
 		char tb[32];
