@@ -1646,6 +1646,8 @@ main(int argc, char *argv[])
 		
 		CFileMgr::SetDir("");
 
+		fprintf(stderr, "[MARK] AppEventHandler: settings done\n"); fflush(stderr);
+
 #ifdef LOAD_INI_SETTINGS
 		LoadINIControllerSettings();
 		if (connectedPadButtons != 0)
@@ -1684,7 +1686,14 @@ main(int argc, char *argv[])
 	_InputInitialiseJoys();
 	initkeymap();
 
+	fprintf(stderr, "[MARK] AppEventHandler: input init done\n"); fflush(stderr);
+
 	while ( TRUE )
+	{
+		{
+			static int s_loopLogged = 0;
+			if (!s_loopLogged) { s_loopLogged = 1; fprintf(stderr, "[MARK] main loop entered\n"); fflush(stderr); }
+		}
 	{
 		RwInitialised = TRUE;
 		
@@ -1743,15 +1752,16 @@ main(int argc, char *argv[])
 				TheModelViewer();
 			} else
 #endif
+			{
+				static int s_prevState = -1;
+				if (gGameState != s_prevState) {
+					s_prevState = gGameState;
+					fprintf(stderr, "[MARK] gGameState -> %d (fg=%d)\n", gGameState, (int)ForegroundApp);
+					fflush(stderr);
+				}
+			}
 			if ( ForegroundApp )
 			{
-				{
-					static int s_prevState = -1;
-					if (gGameState != s_prevState) {
-						s_prevState = gGameState;
-						fprintf(stderr, "[MARK] gGameState -> %d\n", gGameState);
-					}
-				}
 				switch ( gGameState )
 				{
 					case GS_START_UP:
