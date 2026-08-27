@@ -67,9 +67,19 @@ CText::Load(void)
 	}
 
 	file = CFileMgr::OpenFile(filename, "rb");
+	if (file == 0) {
+		// requested-language GXT missing -> fall back to American so the
+		// game can still launch (text will be English).
+		file = CFileMgr::OpenFile("AMERICAN.GXT", "rb");
+	}
+	if (file == 0) {
+		CFileMgr::SetDir("");
+		return;
+	}
 
 	offset = 0;
-	while (!tkey_loaded || !tdat_loaded) {
+	int loadGuard = 0;
+	while ((!tkey_loaded || !tdat_loaded) && loadGuard++ < 4096) {
 		ReadChunkHeader(&m_ChunkHeader, file, &offset);
 		if (m_ChunkHeader.size != 0) {
 			if (strncmp(m_ChunkHeader.magic, "TABL", 4) == 0) {

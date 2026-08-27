@@ -105,6 +105,8 @@ static int
 myfgetc(int fd)
 {
 	int c;
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return EOF;
 	c = fgetc(myfiles[fd].file);
 	if(myfiles[fd].isText && c == 015){
 		/* translate CRLF to LF */
@@ -120,7 +122,9 @@ myfgetc(int fd)
 static int
 myfputc(int c, int fd)
 {
-	/* translate LF to CRLF */
+	
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return EOF;/* translate LF to CRLF */
 	if(myfiles[fd].isText && c == 012)
 		fputc(015, myfiles[fd].file);
 	return fputc(c, myfiles[fd].file);
@@ -152,7 +156,9 @@ myfgets(char *buf, int len, int fd)
 static size_t
 myfread(void *buf, size_t elt, size_t n, int fd)
 {
-	if(myfiles[fd].isText){
+	
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return 0;if(myfiles[fd].isText){
 		unsigned char *p;
 		size_t i;
 		int c;
@@ -173,7 +179,9 @@ myfread(void *buf, size_t elt, size_t n, int fd)
 static size_t
 myfwrite(void *buf, size_t elt, size_t n, int fd)
 {
-	if(myfiles[fd].isText){
+	
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return 0;if(myfiles[fd].isText){
 		unsigned char *p;
 		size_t i;
 		int c;
@@ -194,13 +202,17 @@ myfwrite(void *buf, size_t elt, size_t n, int fd)
 static int
 myfseek(int fd, long offset, int whence)
 {
-	return fseek(myfiles[fd].file, offset, whence);
+	
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return -1;return fseek(myfiles[fd].file, offset, whence);
 }
 
 static int
 myfeof(int fd)
 {
-	return feof(myfiles[fd].file);
+	
+	if(fd < 1 || fd >= NUMFILES || myfiles[fd].file == nil)
+		return 1;return feof(myfiles[fd].file);
 //	return ferror(myfiles[fd].file);
 }
 

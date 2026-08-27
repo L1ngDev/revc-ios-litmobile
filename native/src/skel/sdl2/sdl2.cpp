@@ -1745,6 +1745,13 @@ main(int argc, char *argv[])
 #endif
 			if ( ForegroundApp )
 			{
+				{
+					static int s_prevState = -1;
+					if (gGameState != s_prevState) {
+						s_prevState = gGameState;
+						fprintf(stderr, "[MARK] gGameState -> %d\n", gGameState);
+					}
+				}
 				switch ( gGameState )
 				{
 					case GS_START_UP:

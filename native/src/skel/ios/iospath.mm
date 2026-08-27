@@ -9,6 +9,9 @@
 #import <execinfo.h>
 #import <dlfcn.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <cstdlib>
+#include <exception>
 #include <errno.h>
 
 extern "C" void ios_log(const char *fmt, ...);
@@ -70,6 +73,7 @@ ios_documents_path(void)
 }
 
 static FILE *g_logFile = nil;
+static int   g_logFd = -1;
 
 extern "C" void
 ios_log_open(void)
@@ -79,6 +83,7 @@ ios_log_open(void)
 	char p[1024];
 	snprintf(p, sizeof(p), "%s/gamelog.txt", ios_documents_path());
 	g_logFile = fopen(p, "w");
+	g_logFd = open(p, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 	if (g_logFile) {
 		time_t t = time(nil);
 		char tb[32];
@@ -125,47 +130,66 @@ ios_log_raw(const char *s)
 }
 
 static void
-ios_dump_backtrace(void *ctx)
+ios_fd_raw(const char *s)
 {
-	if (!g_logFile)
-		return;
+	if (g_logFd < 0) return;
+	if (s && *s) write(g_logFd, s, strlen(s));
+	write(g_logFd, "\n", 1);
+}
+
+static void
+ios_fd_fmt(const char *fmt, ...)
+{
+	if (g_logFd < 0) return;
+	char buf[1024];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+	ios_fd_raw(buf);
+}
+
+static void
+ios_dump_backtrace_fd(void)
+{
 	void *bt[64];
 	int n = backtrace(bt, 64);
-	fprintf(g_logFile, "---- backtrace (%d frames) ----\n", n);
+	ios_fd_fmt("---- backtrace (%d frames) ----", n);
 	char **syms = backtrace_symbols(bt, n);
 	for (int i = 0; i < n; i++) {
-		// try to compute module-relative offset for later symbolication
 		Dl_info info;
 		if (dladdr(bt[i], &info) && info.dli_fname) {
 			const char *base = strrchr(info.dli_fname, '/');
 			base = base ? base + 1 : info.dli_fname;
 			unsigned long off = (unsigned long)bt[i] - (unsigned long)info.dli_fbase;
 			if (info.dli_sname)
-				fprintf(g_logFile, "#%02d %s  (%s + 0x%lx)  %s\n", i, syms ? syms[i] : "?", base, off, info.dli_sname);
+				ios_fd_fmt("#%02d %s  (%s + 0x%lx)  %s", i, syms ? syms[i] : "?", base, off, info.dli_sname);
 			else
-				fprintf(g_logFile, "#%02d %s  (%s + 0x%lx)\n", i, syms ? syms[i] : "?", base, off);
+				ios_fd_fmt("#%02d %s  (%s + 0x%lx)", i, syms ? syms[i] : "?", base, off);
 		} else {
-			fprintf(g_logFile, "#%02d %s\n", i, syms ? syms[i] : "?");
+			ios_fd_fmt("#%02d %s", i, syms ? syms[i] : "?");
 		}
 	}
 	free(syms);
-	if (ctx)
-		fprintf(g_logFile, "(ucontext available)\n");
-	fflush(g_logFile);
 }
+
+static volatile sig_atomic_t g_crashing = 0;
 
 static void
 ios_signal_handler(int signum, siginfo_t *info, void *ctx)
 {
-	if (g_logFile) {
-		fprintf(g_logFile, "\n!!!! CRASH: signal %d at address %p !!!!\n", signum, info ? info->si_addr : nil);
-		ios_dump_backtrace(ctx);
-		fprintf(g_logFile, "!!!! end of crash report !!!!\n");
-		fflush(g_logFile);
-		fclose(g_logFile);
-		g_logFile = nil;
+	if (g_crashing) {
+		signal(signum, SIG_DFL);
+		raise(signum);
+		return;
 	}
-	// restore default and re-raise so the OS still generates its own report
+	g_crashing = 1;
+	// Write to a raw fd (NOT stdio) so we never deadlock on the stdio lock
+	// the crashing thread may already hold (e.g. a crash inside fread()).
+	ios_fd_fmt("\n!!!! CRASH: signal %d at address %p !!!!", signum, info ? info->si_addr : nil);
+	ios_dump_backtrace_fd();
+	ios_fd_raw("!!!! end of crash report !!!!");
+	// restore default and re-raise so the OS still generates its own crash report
 	signal(signum, SIG_DFL);
 	raise(signum);
 }
@@ -173,15 +197,32 @@ ios_signal_handler(int signum, siginfo_t *info, void *ctx)
 static void
 ios_ns_exception_handler(NSException *exception)
 {
-	if (g_logFile) {
-		fprintf(g_logFile, "\n!!!! NSException: %s !!!!\n", exception.name.UTF8String);
-		fprintf(g_logFile, "reason: %s\n", exception.reason ? exception.reason.UTF8String : "?");
-		NSString *stack = exception.callStackSymbols ? [exception.callStackSymbols componentsJoinedByString:@"\n"] : nil;
-		fprintf(g_logFile, "call stack:\n%s\n", stack ? stack.UTF8String : "?");
-		fflush(g_logFile);
-		fclose(g_logFile);
-		g_logFile = nil;
-	}
+	if (g_crashing) return;
+	g_crashing = 1;
+	ios_fd_raw("\n!!!! NSException !!!!");
+	if (exception.name)   ios_fd_fmt("name: %s", exception.name.UTF8String);
+	if (exception.reason) ios_fd_fmt("reason: %s", exception.reason.UTF8String);
+	NSString *stack = exception.callStackSymbols ? [exception.callStackSymbols componentsJoinedByString:@"\n"] : nil;
+	if (stack) ios_fd_raw(stack.UTF8String);
+	ios_fd_raw("!!!! end of exception report !!!!");
+}
+
+static void
+ios_atexit(void)
+{
+	if (g_crashing) return;
+	ios_fd_raw("---- normal exit (atexit) ----");
+}
+
+static void
+ios_terminate(void)
+{
+	if (g_crashing) return;
+	g_crashing = 1;
+	ios_fd_raw("\n!!!! std::terminate called (uncaught C++ exception) !!!!");
+	ios_dump_backtrace_fd();
+	ios_fd_raw("!!!! end of terminate report !!!!");
+	abort();
 }
 
 extern "C" void
@@ -189,6 +230,8 @@ ios_install_crash_handler(void)
 {
 	ios_log(">>> ios_install_crash_handler called");
 	NSSetUncaughtExceptionHandler(ios_ns_exception_handler);
+	std::set_terminate(ios_terminate);
+	atexit(ios_atexit);
 
 	// alternate signal stack so we survive stack overflows too
 	static char sigstack[SIGSTKSZ * 4];
@@ -202,16 +245,7 @@ ios_install_crash_handler(void)
 	memset(&act, 0, sizeof(act));
 	act.sa_sigaction = ios_signal_handler;
 	act.sa_flags = SA_SIGINFO | SA_ONSTACK;
-	const int sigs[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP };
+	const int sigs[] = { SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP, SIGPIPE };
 	for (size_t i = 0; i < sizeof(sigs) / sizeof(sigs[0]); i++)
 		sigaction(sigs[i], &act, nil);
-
-	// heartbeat: proves the process is alive even if the main thread hangs
-	dispatch_async(dispatch_get_global_queue(QOS_CLASS_BACKGROUND, 0), ^{
-		static int beat = 0;
-		while (true) {
-			[NSThread sleepForTimeInterval:5.0];
-			ios_log("heartbeat %d", ++beat);
-		}
-	});
 }
