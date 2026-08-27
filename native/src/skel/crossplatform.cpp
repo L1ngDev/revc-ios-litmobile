@@ -3,6 +3,8 @@
 #include "FileMgr.h"
 #include <locale.h>
 
+extern "C" void ios_log(const char *fmt, ...);
+
 // Codes compatible with Windows and Linux
 #ifndef _WIN32
 
@@ -154,6 +156,7 @@ FILE* _fcaseopen(char const* filename, char const* mode)
 		result = fopen(real, mode);
 		free(real);
 	}
+	ios_log("fcaseopen: in='%s' resolved='%s' => %s", filename, real ? real : "(nil)", result ? "OK" : "FAIL");
 	return result;
 }
 
@@ -277,6 +280,7 @@ char* casepath(char const* path, bool checkPathFirst)
 		if (!e)
 		{
 			printf("casepath couldn't find dir/file \"%s\", full path was %s\n", c, path);
+			ios_log("casepath: NOT FOUND component '%s' (full '%s'), cwd context lost", c, path);
 			// No match, add original name and continue converting further slashes.
 			strcpy(out + rl, c);
 			rl += strlen(c);
