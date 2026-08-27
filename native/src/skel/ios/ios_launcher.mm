@@ -4,6 +4,8 @@
 #import <objc/runtime.h>
 #import <stdlib.h>
 
+extern "C" void ios_log(const char *fmt, ...);
+
 static volatile int g_playPressed = 0;
 
 // ---------------------------------------------------------------- server data
@@ -812,26 +814,44 @@ BuildMainScreen(UIView *root)
 extern "C" void
 ios_show_launcher(void *uiwindow)
 {
+	ios_log(">>> ios_show_launcher ENTER");
 	@autoreleasepool {
 		UIWindow *uiw = (__bridge UIWindow *)uiwindow;
 		UIView *root = uiw.rootViewController.view;
-		if (!root)
+		if (!root) {
+			ios_log("!!! ios_show_launcher: root view is nil, aborting");
 			return;
+		}
 		[root layoutIfNeeded];
 
 		g_playPressed = 0;
 		g_mainPanelHolder = nil;
 
-		BuildMainScreen(root);
-		ShowLoader(root);
+		@try {
+			ios_log("... BuildMainScreen");
+			BuildMainScreen(root);
+			ios_log("... BuildMainScreen OK");
+		} @catch (NSException *e) {
+			ios_log("EXCEPTION BuildMainScreen: %s / %s", e.name.UTF8String, e.reason.UTF8String);
+		}
+		@try {
+			ios_log("... ShowLoader");
+			ShowLoader(root);
+			ios_log("... ShowLoader OK");
+		} @catch (NSException *e) {
+			ios_log("EXCEPTION ShowLoader: %s / %s", e.name.UTF8String, e.reason.UTF8String);
+		}
 	}
+	ios_log("<<< ios_show_launcher EXIT");
 }
 
 extern "C" int
 ios_play_pressed(void)
 {
+	ios_log(">>> ios_play_pressed");
 	// remove the launcher the moment play was pressed (caller resumes the game)
 	if (g_playPressed) {
+		ios_log("    play pressed -> removing launcher views");
 		dispatch_async(dispatch_get_main_queue(), ^{
 			NSArray<NSNumber *> *tags = @[ @(kTagMain), @(kTagLoader), @(kTagServers) ];
 			for (UIWindow *w in [UIApplication sharedApplication].windows) {

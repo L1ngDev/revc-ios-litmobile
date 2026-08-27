@@ -9,6 +9,19 @@
 #import <execinfo.h>
 #import <dlfcn.h>
 
+extern "C" void ios_log(const char *fmt, ...);
+extern "C" void ios_install_crash_handler(void);
+
+// Install logging + crash capture as early as possible (at dynamic load),
+// before reVC's own startup code runs, so even early crashes are captured.
+__attribute__((constructor))
+static void ios_early_init(void) {
+	ios_log_open();
+	ios_log("=== reVC iOS early init (constructor) ===");
+	ios_install_crash_handler();
+	ios_log("crash handler installed");
+}
+
 extern "C" const char *
 ios_resource_path(void)
 {
@@ -47,6 +60,9 @@ ios_log_open(void)
 		strftime(tb, sizeof(tb), "%Y-%m-%d %H:%M:%S", localtime(&t));
 		fprintf(g_logFile, "==== gamelog started %s ====\n", tb);
 		fflush(g_logFile);
+		// Capture engine stdout/stderr (reVC prints errors via printf) into the same log.
+		freopen(p, "a", stdout);
+		freopen(p, "a", stderr);
 	}
 }
 
@@ -146,6 +162,7 @@ ios_ns_exception_handler(NSException *exception)
 extern "C" void
 ios_install_crash_handler(void)
 {
+	ios_log(">>> ios_install_crash_handler called");
 	NSSetUncaughtExceptionHandler(ios_ns_exception_handler);
 
 	// alternate signal stack so we survive stack overflows too
