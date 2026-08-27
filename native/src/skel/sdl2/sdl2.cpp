@@ -2,14 +2,11 @@
 #include "SDL_gamecontroller.h"
 #include "SDL_joystick.h"
 
-#if defined(__APPLE__)
 // ios_log writes directly to Documents/gamelog.txt (it flushes). Used for
 // milestone markers so they survive even if the process is killed right after.
+// This target is iOS-only; ios_log is defined in iospath.mm.
 extern "C" void ios_log(const char *fmt, ...);
 #define IOS_MARK(...) ios_log(__VA_ARGS__)
-#else
-#define IOS_MARK(...) ((void)0)
-#endif
 #ifdef _WIN32
 #include <shlobj.h>
 #include <basetsd.h>
@@ -1653,6 +1650,7 @@ main(int argc, char *argv[])
 			CFileMgr::CloseFile(gta3set);
 		}
 		
+		IOS_MARK("[MARK] AE: before SetDir('')");
 		CFileMgr::SetDir("");
 		IOS_MARK("[MARK] AE: SetDir('') done");
 
