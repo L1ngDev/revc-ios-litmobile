@@ -1694,7 +1694,6 @@ main(int argc, char *argv[])
 			static int s_loopLogged = 0;
 			if (!s_loopLogged) { s_loopLogged = 1; fprintf(stderr, "[MARK] main loop entered\n"); fflush(stderr); }
 		}
-	{
 		RwInitialised = TRUE;
 		
 		/* 
