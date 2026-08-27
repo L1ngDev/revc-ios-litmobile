@@ -10,6 +10,7 @@
 #import <dlfcn.h>
 
 extern "C" void ios_log(const char *fmt, ...);
+extern "C" void ios_log_open(void);
 extern "C" void ios_install_crash_handler(void);
 
 // Install logging + crash capture as early as possible (at dynamic load),
