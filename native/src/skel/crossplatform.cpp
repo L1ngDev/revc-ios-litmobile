@@ -152,11 +152,11 @@ FILE* _fcaseopen(char const* filename, char const* mode)
 	char* real = casepath(filename);
 	if (!real)
 		result = fopen(filename, mode);
-	else {
+	else
 		result = fopen(real, mode);
-		free(real);
-	}
 	ios_log("fcaseopen: in='%s' resolved='%s' => %s", filename, real ? real : "(nil)", result ? "OK" : "FAIL");
+	if (real)
+		free(real);
 	return result;
 }
 
@@ -226,10 +226,12 @@ char* casepath(char const* path, bool checkPathFirst)
 		pos += strlen(CFileMgr::GetRootDirName());
 		p = pos;
 	}
-    d = opendir(cwd);
-    out[0] = '.';
-    out[1] = 0;
-    rl = 1;//TODO CLEAN UP EVERYTHING
+    	d = opendir(cwd);
+    	if (!d)
+    		ios_log("casepath: opendir(cwd='%s') FAILED errno=%d", cwd, errno);
+    	out[0] = '.';
+    	out[1] = 0;
+    	rl = 1;//TODO CLEAN UP EVERYTHING
 
 	bool cantProceed = false; // just convert slashes in what's left in string, don't correct case of letters(because we can't)
 	bool mayBeTrailingSlash = false;
@@ -280,7 +282,7 @@ char* casepath(char const* path, bool checkPathFirst)
 		if (!e)
 		{
 			printf("casepath couldn't find dir/file \"%s\", full path was %s\n", c, path);
-			ios_log("casepath: NOT FOUND component '%s' (full '%s'), cwd context lost", c, path);
+			ios_log("casepath: NOT FOUND component '%s' (full '%s') cwd='%s'", c, path, cwd);
 			// No match, add original name and continue converting further slashes.
 			strcpy(out + rl, c);
 			rl += strlen(c);
