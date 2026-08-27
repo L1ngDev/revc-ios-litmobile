@@ -1,6 +1,15 @@
 #include "SDL.h"
 #include "SDL_gamecontroller.h"
 #include "SDL_joystick.h"
+
+#if defined(__APPLE__)
+// ios_log writes directly to Documents/gamelog.txt (it flushes). Used for
+// milestone markers so they survive even if the process is killed right after.
+extern "C" void ios_log(const char *fmt, ...);
+#define IOS_MARK(...) ios_log(__VA_ARGS__)
+#else
+#define IOS_MARK(...) ((void)0)
+#endif
 #ifdef _WIN32
 #include <shlobj.h>
 #include <basetsd.h>
@@ -1645,8 +1654,9 @@ main(int argc, char *argv[])
 		}
 		
 		CFileMgr::SetDir("");
+		IOS_MARK("[MARK] AE: SetDir('') done");
 
-		fprintf(stderr, "[MARK] AppEventHandler: settings done\n"); fflush(stderr);
+		IOS_MARK("[MARK] AppEventHandler: settings done");
 
 #ifdef LOAD_INI_SETTINGS
 		LoadINIControllerSettings();
@@ -1682,17 +1692,21 @@ main(int argc, char *argv[])
 	{
 		printf("Failed to initialize SDL GameController API: %s\n", SDL_GetError());
 	}
+	IOS_MARK("[MARK] AE: SDL_InitSubSystem(JOYSTICK) done");
 	SDL_GameControllerAddMappingsFromFile( "gamecontrollerdb.txt" );
+	IOS_MARK("[MARK] AE: AddMappingsFromFile done");
 	_InputInitialiseJoys();
+	IOS_MARK("[MARK] AE: InputInitialiseJoys done");
 	initkeymap();
+	IOS_MARK("[MARK] AE: initkeymap done");
 
-	fprintf(stderr, "[MARK] AppEventHandler: input init done\n"); fflush(stderr);
+	IOS_MARK("[MARK] AppEventHandler: input init done");
 
 	while ( TRUE )
 	{
 		{
 			static int s_loopLogged = 0;
-			if (!s_loopLogged) { s_loopLogged = 1; fprintf(stderr, "[MARK] main loop entered\n"); fflush(stderr); }
+			if (!s_loopLogged) { s_loopLogged = 1; IOS_MARK("[MARK] main loop entered"); }
 		}
 		RwInitialised = TRUE;
 		
@@ -1755,8 +1769,7 @@ main(int argc, char *argv[])
 				static int s_prevState = -1;
 				if (gGameState != s_prevState) {
 					s_prevState = gGameState;
-					fprintf(stderr, "[MARK] gGameState -> %d (fg=%d)\n", gGameState, (int)ForegroundApp);
-					fflush(stderr);
+					IOS_MARK("[MARK] gGameState -> %d (fg=%d)", gGameState, (int)ForegroundApp);
 				}
 			}
 			if ( ForegroundApp )
