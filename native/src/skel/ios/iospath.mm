@@ -8,6 +8,8 @@
 #import <ctime>
 #import <execinfo.h>
 #import <dlfcn.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 extern "C" void ios_log(const char *fmt, ...);
 extern "C" void ios_log_open(void);
@@ -19,6 +21,25 @@ __attribute__((constructor))
 static void ios_early_init(void) {
 	ios_log_open();
 	ios_log("=== reVC iOS early init (constructor) ===");
+
+	// reVC resolves ALL game data (TEXT/AMERICAN.GXT, MODELS/*, DATA/*, ...)
+	// relative to the process CWD. On iOS the CWD is the app bundle, where no
+	// game data lives. Point CWD at the gamefiles folder the user dropped into
+	// the app's Documents (iTunes File Sharing -> reVC -> gamefiles) so the
+	// engine actually finds the data instead of fopen(NULL) -> SIGSEGV.
+	const char *docs = ios_documents_path();
+	if (docs && *docs) {
+		char gf[2048];
+		snprintf(gf, sizeof(gf), "%s/gamefiles", docs);
+		if (access(gf, F_OK) == 0) {
+			if (chdir(gf) == 0) ios_log("chdir -> %s", gf);
+			else ios_log("chdir(%s) FAILED: %s", gf, strerror(errno));
+		} else if (access(docs, F_OK) == 0) {
+			if (chdir(docs) == 0) ios_log("chdir -> %s (no gamefiles subdir)", docs);
+			else ios_log("chdir(%s) FAILED: %s", docs, strerror(errno));
+		}
+	}
+
 	ios_install_crash_handler();
 	ios_log("crash handler installed");
 }
