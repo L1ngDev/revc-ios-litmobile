@@ -14,6 +14,7 @@
 extern "C" void ios_log(const char *fmt, ...);
 extern "C" void ios_log_open(void);
 extern "C" void ios_install_crash_handler(void);
+extern "C" const char *ios_documents_path(void);
 
 // Install logging + crash capture as early as possible (at dynamic load),
 // before reVC's own startup code runs, so even early crashes are captured.
